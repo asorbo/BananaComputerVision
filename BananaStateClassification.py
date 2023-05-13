@@ -13,12 +13,19 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
+import time
 
+#CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
+CLASSES = ('overripe', 'ripe', 'rotten', 'unripe')
+EPHOCS = 30  #input EPHOCH + 1
 
-BATCH_SIZE = 4
-CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
-EPHOCS = 2
-PATH = './cifar_net.pth'
+#ARCHITECHTURES = ["Cifar", "Res50"]
+#BATCH_SIZES = [5, 10, 20]
+#LEARNING_RATES = [0.001, 0.0005, 0.0001]
+ARCHITECHTURES = ["Cifar"]
+BATCH_SIZES = [10]
+LEARNING_RATES = [0.0005]
 
 
 #The custom image dataset loader
@@ -44,16 +51,16 @@ class CustomImageDataset(Dataset):
             label = self.target_transform(label)
         return image, label
 
-#The (convolutional) neural network
+# The (convolutional) neural network baseline
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5) #slide the filter with 3 in channels, 6 out channels and stride size = 5
-        self.pool = nn.MaxPool2d(2, 2)  #max pooling with a 2 by 2 filter
+        self.conv1 = nn.Conv2d(3, 6, 5) # slide the filter with 3 in channels, 6 out channels and stride size = 5
+        self.pool = nn.MaxPool2d(2, 2)  # max pooling with a 2 by 2 filter
         self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(2704, 200) #fully connected layer
+        self.fc1 = nn.Linear(2704, 200) # fully connected layer
         self.fc2 = nn.Linear(200, 84)
-        self.fc3 = nn.Linear(84, 6)
+        self.fc3 = nn.Linear(84, 4)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
@@ -62,7 +69,31 @@ class Net(nn.Module):
         x = F.relu(self.fc1(x)) # ReLU -> activation function that introduces the property of non-linearity to a deep learning model and solves the vanishing gradients issue. 
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return x
+        return x    
+
+#tollerance is the amount of scores that are counted, min delta is the minimum increase required to continue
+class EarlyStopping:
+    def __init__(self, tolerance=5, min_delta=0.001):
+
+        self.tolerance = tolerance
+        self.min_delta = min_delta
+        self.early_stop = False
+        self.scores = []
+
+    def check(self, score):
+        self.scores.append(score)
+        if len(self.scores) < (self.tolerance + 1):
+            return
+
+        delta = 0
+        current_score = self.scores[-(self.tolerance+1)]
+        for score in self.scores[-self.tolerance:]:
+            delta += score-current_score
+            current_score = score
+        delta /= self.tolerance
+        if delta < self.min_delta:
+            print(f"Improved less then {self.min_delta*100}\% in the last {self.tolerance} epochs, early stopping")
+            self.early_stop = True 
     
 # functions to show an image
 def imshow(img):
@@ -82,7 +113,7 @@ def test_dataloader(loader):
     #print the tensor label
     #print(' '.join(f'{labels[j]}' for j in range(batch_size)))
 
-    #print the human label
+    # print the human label
     images_labels = []
     for image_index in range(BATCH_SIZE):
         current_labels = []
@@ -94,11 +125,15 @@ def test_dataloader(loader):
         images_labels.append('-'.join(current_labels))
     print(" | ".join(images_labels))    
 
-#train the net
+# train the net
 def train():
+    train_scores_history = []
+    valid_scores_history = []
+    early_stopping = EarlyStopping()
     for epoch in range(EPHOCS):  # loop over the dataset multiple times
-
         running_loss = 0.0
+        runs = 0
+        loss = None
         for i, data in enumerate(trainloader, 0):
             # get the inputs; data is a list of [inputs, labels]
             inputs, labels = data[0].to(device), data[1].to(device)
@@ -111,14 +146,55 @@ def train():
             loss = criterion(outputs, labels) #use Cross entropy loss to see how far we are from the actual labels
             loss.backward() #calculate the new weights (computes the partial derivative of the output f with respect to each of the input variables)
             optimizer.step()    #apply the weights now 
-            
-
-            # print statistics
+            runs += 1
             running_loss += loss.item()
-            if i % 2000 == 1999:    # print every 2000 mini-batches
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
-                running_loss = 0.0
+        running_loss /= runs
+        print(f"Epoch {epoch+1}/{EPHOCS}: {running_loss}")
+        train_scores_history.append(test_overall(net, trainloader, averaged_minibatch_training_loss=running_loss))
+        valid_scores_history.append(test_overall(net, validloader))
+        early_stopping.check(valid_scores_history[-1]["accuracy"])
+        if(early_stopping.early_stop):
+            break
+    
     print('Finished Training')
+    plot(train_scores_history, valid_scores_history)
+
+def plot(train_scores_history, valid_scores_history):
+    plot_data = [train_scores_history, valid_scores_history]
+    n_epochs = len(valid_scores_history)
+    np.save(PATH + "_plotdata.npy", plot_data)
+
+    plt.figure(figsize=(15, 7))
+    plt.suptitle(NAME)
+    plt.subplots_adjust(hspace=1)
+
+    plt.subplot(121).set_box_aspect(1)
+    plt.title("Performance")
+    train_scores_accuracy_history = [score["accuracy"] for score in train_scores_history]
+    valid_scores_accuracy_history = [score["accuracy"] for score in valid_scores_history]
+    plt.xlim(1, n_epochs+1)
+    plt.xticks(np.arange(1, n_epochs+1, 1))
+    plt.plot(train_scores_accuracy_history, linestyle="solid", label="Train accuracy")
+    plt.plot(valid_scores_accuracy_history, linestyle="dotted", label="Validation accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
+    plt.legend()
+    
+    plt.subplot(122).set_box_aspect(1)
+    plt.title("Optimization")
+    train_scores_loss_history = [score["loss"] for score in train_scores_history]
+    valid_scores_loss_history = [score["loss"] for score in valid_scores_history]
+    plt.xlim(1, n_epochs+1)
+    plt.xticks(np.arange(1, n_epochs+1, 1))
+    plt.plot(train_scores_loss_history, linestyle="solid", label="Train loss")
+    plt.plot(valid_scores_loss_history, linestyle="dotted", label="Validation loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (%)")
+    plt.legend()
+    
+    
+    plt.savefig(PATH + ".png")
+    print("Plot saved as ", PATH + ".png")
 
 def random_predict():
     dataiter = iter(testloader)
@@ -126,7 +202,7 @@ def random_predict():
 
     print('GroundTruth: ', ' '.join(f'{CLASSES[labels[j]]:5s}' for j in range(4)))
 
-    net = load(PATH)
+    net = load(PATH + ".pth")
     outputs = net(images)
     outputs.to(device)
     _, predicted = torch.max(outputs, 1)
@@ -136,22 +212,24 @@ def random_predict():
     imshow(torchvision.utils.make_grid(images))
 
 #test overall accuracy
-def test_overall_accuracy():
+#param averaged_minibatch_training_loss replaces the training loss if available 
+def test_overall(net, dataloader, averaged_minibatch_training_loss = None):
     #do this at each epoch (then plot)
     correct = 0
     total = 0
     # since we're not training, we don't need to calculate the gradients for our outputs
     with torch.no_grad():
-        for data in testloader:
-            images, labels = data
+        for data in dataloader:
+            images, labels = data[0].to(device), data[1].to(device)
             # calculate outputs by running images through the network
             outputs = net(images)
+            loss = criterion(outputs, labels)
             # the class with the highest energy is what we choose as prediction
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-
-    print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+    accuracy = 100 * correct // total
+    return {"accuracy": accuracy, "loss": (averaged_minibatch_training_loss if averaged_minibatch_training_loss else loss.item())}
 
 #test predictions for each class
 def test_classes_accuracy():
@@ -198,29 +276,50 @@ transform = transforms.Compose(
      transforms.Resize(64),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])   #to make model training less sensitive to the scale of features
 
-trainset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClassDataset/train/_classes.csv", 
-                                   "/home/ago/Documents/Thesis/BananaComputerVision/MonoClassDataset/train/",
-                                   transform=transform)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH_SIZE,
-                                          shuffle=True, num_workers=2)
+start = time.time()
+print(start)
+for architecture in ARCHITECHTURES:
+    for batch_size in BATCH_SIZES:
+        for learning_rate in LEARNING_RATES:
+            global PATH
+            PATH = f'./models/{architecture}_lr={learning_rate}_batchSize={batch_size}'
+            global NAME
+            NAME = f'{architecture}, lr={learning_rate}, batch size={batch_size}'
+            print(f"\n\n Training: {NAME}")
 
-testset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClassDataset/test/_classes.csv", 
-                                   "/home/ago/Documents/Thesis/BananaComputerVision/MonoClassDataset/test/",
-                                   transform=transform)
-testloader = torch.utils.data.DataLoader(testset, batch_size=BATCH_SIZE,
-                                         shuffle=False, num_workers=2)
+            trainset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/train/_classes.csv", 
+                                            "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/train/",
+                                            transform=transform)
+            trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                                    shuffle=True, num_workers=2)
+
+            validset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/valid/_classes.csv", 
+                                            "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/valid/",
+                                            transform=transform)
+            validloader = torch.utils.data.DataLoader(validset, batch_size=batch_size,
+                                                    shuffle=False, num_workers=2)
+
+            testset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/test/_classes.csv", 
+                                            "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/test/",
+                                            transform=transform)
+            testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+                                                    shuffle=False, num_workers=2)
+
+            net = Net()
+            if (architecture == "Res50"):
+                net = torchvision.models.resnet50(weights='DEFAULT').to(device)
+            elif(architecture == "Cifar"):
+                net.to(device)  #to the GPU
+            criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
+            optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003) #stocastic gradient descent weight decay implements a L2 regularization to reduce spikes in loss
+
+            train()
+            save(PATH + ".pth")
+end = time.time()
+print(end - start) #total time in seconds
 
 
-test_dataloader(trainloader)
-
-net = Net()
-net.to(device)  #to the GPU
-criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9) #stocastic gradient descent
-
-train()
-save(PATH)
-net = load(PATH)
-random_predict()
-test_overall_accuracy()
-test_classes_accuracy()
+#net = load(PATH + ".pth")
+#random_predict()
+#test_overall_accuracy()
+#test_classes_accuracy()
