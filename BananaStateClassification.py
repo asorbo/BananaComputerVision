@@ -15,17 +15,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import time
+import copy
+import json
 
 #CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
 CLASSES = ('overripe', 'ripe', 'rotten', 'unripe')
 EPHOCS = 30  #input EPHOCH + 1
 
-#ARCHITECHTURES = ["Cifar", "Res50"]
-#BATCH_SIZES = [5, 10, 20]
-#LEARNING_RATES = [0.001, 0.0005, 0.0001]
-ARCHITECHTURES = ["Cifar"]
-BATCH_SIZES = [10]
-LEARNING_RATES = [0.0005]
+ARCHITECHTURES = ["Cifar", "Res50"]
+BATCH_SIZES = [5, 10, 20]
+LEARNING_RATES = [0.001, 0.0005, 0.0001]
 
 
 #The custom image dataset loader
@@ -130,6 +129,8 @@ def train():
     train_scores_history = []
     valid_scores_history = []
     early_stopping = EarlyStopping()
+    best_accuracy = 0
+    best_net_epoch = 0
     for epoch in range(EPHOCS):  # loop over the dataset multiple times
         running_loss = 0.0
         runs = 0
@@ -152,17 +153,28 @@ def train():
         print(f"Epoch {epoch+1}/{EPHOCS}: {running_loss}")
         train_scores_history.append(test_overall(net, trainloader, averaged_minibatch_training_loss=running_loss))
         valid_scores_history.append(test_overall(net, validloader))
-        early_stopping.check(valid_scores_history[-1]["accuracy"])
+
+        latest_accuracy = valid_scores_history[-1]["accuracy"]
+        if latest_accuracy > best_accuracy:
+            best_accuracy = latest_accuracy
+            best_net = copy.deepcopy(net)
+            #optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003)
+            best_net_epoch = epoch
+
+        early_stopping.check(latest_accuracy)
         if(early_stopping.early_stop):
             break
     
     print('Finished Training')
-    plot(train_scores_history, valid_scores_history)
+    return train_scores_history, valid_scores_history, best_net_epoch
 
-def plot(train_scores_history, valid_scores_history):
-    plot_data = [train_scores_history, valid_scores_history]
+#this saves data before plotting, should refactor
+def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score):
+    dump_data.update({"train_scores_history": train_scores_history, 
+                 "valid_scores_history":valid_scores_history,
+                 "best_net_epoch": best_net_epoch})
+    
     n_epochs = len(valid_scores_history)
-    np.save(PATH + "_plotdata.npy", plot_data)
 
     plt.figure(figsize=(15, 7))
     plt.suptitle(NAME)
@@ -176,6 +188,9 @@ def plot(train_scores_history, valid_scores_history):
     plt.xticks(np.arange(1, n_epochs+1, 1))
     plt.plot(train_scores_accuracy_history, linestyle="solid", label="Train accuracy")
     plt.plot(valid_scores_accuracy_history, linestyle="dotted", label="Validation accuracy")
+    plt.axvline(x = best_net_epoch, color = 'r', label = 'Early Stop')
+    plt.plot(best_net_epoch, test_score, 'go', label = "Test score")
+    plt.plot()
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy (%)")
     plt.legend()
@@ -188,6 +203,7 @@ def plot(train_scores_history, valid_scores_history):
     plt.xticks(np.arange(1, n_epochs+1, 1))
     plt.plot(train_scores_loss_history, linestyle="solid", label="Train loss")
     plt.plot(valid_scores_loss_history, linestyle="dotted", label="Validation loss")
+    plt.axvline(x = best_net_epoch, color = 'r', label = 'Early Stop')
     plt.xlabel("Epoch")
     plt.ylabel("Loss (%)")
     plt.legend()
@@ -240,7 +256,7 @@ def test_classes_accuracy():
     # again no gradients needed
     with torch.no_grad():
         for data in testloader:
-            images, labels = data
+            images, labels = data[0].to(device), data[1].to(device)
             outputs = net(images)
             _, predictions = torch.max(outputs, 1)
             # collect the correct predictions for each class
@@ -249,16 +265,19 @@ def test_classes_accuracy():
                     correct_pred[CLASSES[label]] += 1
                 total_pred[CLASSES[label]] += 1
 
-
+    test_classes_accuracy = {}
     # print accuracy for each class
     for classname, correct_count in correct_pred.items():
         accuracy = 100 * float(correct_count) / total_pred[classname]
-        print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
+        test_classes_accuracy.update({f"{classname}": accuracy})
+    return test_classes_accuracy
 
 def save(path):
     print("Saving to ", path)
-    torch.save(net.state_dict(), path)
+    torch.save(best_net.state_dict(), path + ".pth")
     print("Saved")
+    with open(PATH + "_plotdata.json", "w") as outfile:
+        outfile.write(json.dumps(dump_data, indent=4))
 
 def load(path):
     print("Loading from ", path)
@@ -278,6 +297,7 @@ transform = transforms.Compose(
 
 start = time.time()
 print(start)
+dump_data = {}
 for architecture in ARCHITECHTURES:
     for batch_size in BATCH_SIZES:
         for learning_rate in LEARNING_RATES:
@@ -298,14 +318,15 @@ for architecture in ARCHITECHTURES:
                                             transform=transform)
             validloader = torch.utils.data.DataLoader(validset, batch_size=batch_size,
                                                     shuffle=False, num_workers=2)
-
+            
             testset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/test/_classes.csv", 
                                             "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/test/",
                                             transform=transform)
             testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                                    shuffle=False, num_workers=2)
+                                                     shuffle=False, num_workers=2)
 
             net = Net()
+            best_net = net
             if (architecture == "Res50"):
                 net = torchvision.models.resnet50(weights='DEFAULT').to(device)
             elif(architecture == "Cifar"):
@@ -313,13 +334,22 @@ for architecture in ARCHITECHTURES:
             criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
             optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003) #stocastic gradient descent weight decay implements a L2 regularization to reduce spikes in loss
 
-            train()
-            save(PATH + ".pth")
+            train_scores_history, valid_scores_history, best_net_epoch = train()
+            
+            test_score = test_overall(best_net, testloader)["accuracy"]
+            print(test_score)
+            dump_data.update({"test_score": test_score})
+            plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
+            dump_data.update( {"test_classes_accuracy": test_classes_accuracy()})
+
+            save(PATH)
 end = time.time()
 print(end - start) #total time in seconds
 
 
-#net = load(PATH + ".pth")
+
+
+
+
+net = load("models/Cifar_lr=0.0005_batchSize=10.pth").to(device)
 #random_predict()
-#test_overall_accuracy()
-#test_classes_accuracy()
