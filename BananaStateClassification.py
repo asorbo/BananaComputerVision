@@ -20,9 +20,9 @@ import json
 
 #CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
 CLASSES = ('overripe', 'ripe', 'rotten', 'unripe')
-EPHOCS = 30  #input EPHOCH + 1
+EPHOCS = 3  #input EPHOCH + 1
 
-ARCHITECHTURES = ["Cifar", "Res50"]
+ARCHITECHTURES = ["Res50", "CustomCNN"]
 BATCH_SIZES = [5, 10, 20]
 LEARNING_RATES = [0.001, 0.0005, 0.0001]
 
@@ -238,7 +238,7 @@ def test_overall(net, dataloader, averaged_minibatch_training_loss = None):
         for data in dataloader:
             images, labels = data[0].to(device), data[1].to(device)
             # calculate outputs by running images through the network
-            outputs = net(images)
+            outputs = net(images).to(device)
             loss = criterion(outputs, labels)
             # the class with the highest energy is what we choose as prediction
             _, predicted = torch.max(outputs.data, 1)
@@ -257,7 +257,7 @@ def test_classes_accuracy():
     with torch.no_grad():
         for data in testloader:
             images, labels = data[0].to(device), data[1].to(device)
-            outputs = net(images)
+            outputs = net(images).to(device)
             _, predictions = torch.max(outputs, 1)
             # collect the correct predictions for each class
             for label, prediction in zip(labels, predictions):
@@ -282,7 +282,7 @@ def save(path):
 def load(path):
     print("Loading from ", path)
     net = Net()
-    net.load_state_dict(torch.load(path))
+    net.load_state_dict(torch.load(path), map_location="cuda:0")
     print("Loaded")
     return net
 
@@ -329,13 +329,13 @@ for architecture in ARCHITECHTURES:
             best_net = net
             if (architecture == "Res50"):
                 net = torchvision.models.resnet50(weights='DEFAULT').to(device)
-            elif(architecture == "Cifar"):
+            elif(architecture == "CustomCNN"):
                 net.to(device)  #to the GPU
             criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
             optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003) #stocastic gradient descent weight decay implements a L2 regularization to reduce spikes in loss
 
             train_scores_history, valid_scores_history, best_net_epoch = train()
-            
+            best_net.to(device)
             test_score = test_overall(best_net, testloader)["accuracy"]
             print(test_score)
             dump_data.update({"test_score": test_score})
@@ -345,11 +345,4 @@ for architecture in ARCHITECHTURES:
             save(PATH)
 end = time.time()
 print(end - start) #total time in seconds
-
-
-
-
-
-
-net = load("models/Cifar_lr=0.0005_batchSize=10.pth").to(device)
 #random_predict()
