@@ -1,0 +1,96 @@
+{
+    "test_score": 23,
+    "train_scores_history": [
+        {
+            "accuracy": 73,
+            "loss": 1.463189536404806
+        },
+        {
+            "accuracy": 81,
+            "loss": 0.6237737325558639
+        },
+        {
+            "accuracy": 86,
+            "loss": 0.4451767557275265
+        },
+        {
+            "accuracy": 90,
+            "loss": 0.32177510897689715
+        },
+        {
+            "accuracy": 94,
+            "loss": 0.24438363326532958
+        },
+        {
+            "accuracy": 95,
+            "loss": 0.1734415390251524
+        },
+        {
+            "accuracy": 96,
+            "loss": 0.14634563071633194
+        },
+        {
+            "accuracy": 97,
+            "loss": 0.10339345550503726
+        },
+        {
+            "accuracy": 97,
+            "loss": 0.08551265747950515
+        },
+        {
+            "accuracy": 98,
+            "loss": 0.07649972427464158
+        }
+    ],
+    "valid_scores_history": [
+        {
+            "accuracy": 71,
+            "loss": 1.3135466575622559
+        },
+        {
+            "accuracy": 78,
+            "loss": 1.4249593019485474
+        },
+        {
+            "accuracy": 79,
+            "loss": 1.4344755411148071
+        },
+        {
+            "accuracy": 82,
+            "loss": 1.098282814025879
+        },
+        {
+            "accuracy": 82,
+            "loss": 1.1102238893508911
+        },
+        {
+            "accuracy": 84,
+            "loss": 1.2407557964324951
+        },
+        {
+            "accuracy": 84,
+            "loss": 1.1374856233596802
+        },
+        {
+            "accuracy": 85,
+            "loss": 1.8437583446502686
+        },
+        {
+            "accuracy": 86,
+            "loss": 1.6405532360076904
+        },
+        {
+            "accuracy": 84,
+            "loss": 0.9306413531303406
+        }
+    ],
+    "best_net_epoch": 8,
+    "test_classes_accuracy": {
+        "freshripe": 0.0,
+        "freshunripe": 0.0,
+        "overripe": 0.0,
+        "ripe": 0.0,
+        "rotten": 100.0,
+        "unripe": 0.0
+    }
+}

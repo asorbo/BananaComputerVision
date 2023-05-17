@@ -1,0 +1,120 @@
+{
+    "test_score": 21,
+    "train_scores_history": [
+        {
+            "accuracy": 59,
+            "loss": 2.1166424687203915
+        },
+        {
+            "accuracy": 67,
+            "loss": 0.8923888404094547
+        },
+        {
+            "accuracy": 74,
+            "loss": 0.745870806569348
+        },
+        {
+            "accuracy": 77,
+            "loss": 0.6327270739349083
+        },
+        {
+            "accuracy": 81,
+            "loss": 0.5447480984202022
+        },
+        {
+            "accuracy": 84,
+            "loss": 0.4680082267303636
+        },
+        {
+            "accuracy": 87,
+            "loss": 0.39961456051043237
+        },
+        {
+            "accuracy": 89,
+            "loss": 0.34972646858713025
+        },
+        {
+            "accuracy": 91,
+            "loss": 0.2890674859893457
+        },
+        {
+            "accuracy": 92,
+            "loss": 0.2441237553906349
+        },
+        {
+            "accuracy": 94,
+            "loss": 0.20775860713677158
+        },
+        {
+            "accuracy": 95,
+            "loss": 0.18122205571903321
+        },
+        {
+            "accuracy": 95,
+            "loss": 0.14936365846883207
+        }
+    ],
+    "valid_scores_history": [
+        {
+            "accuracy": 60,
+            "loss": 1.435865879058838
+        },
+        {
+            "accuracy": 68,
+            "loss": 1.4480772018432617
+        },
+        {
+            "accuracy": 73,
+            "loss": 1.2994465827941895
+        },
+        {
+            "accuracy": 75,
+            "loss": 1.5973687171936035
+        },
+        {
+            "accuracy": 76,
+            "loss": 1.6400593519210815
+        },
+        {
+            "accuracy": 78,
+            "loss": 2.114957571029663
+        },
+        {
+            "accuracy": 80,
+            "loss": 1.7857917547225952
+        },
+        {
+            "accuracy": 81,
+            "loss": 2.22434401512146
+        },
+        {
+            "accuracy": 81,
+            "loss": 2.3433287143707275
+        },
+        {
+            "accuracy": 82,
+            "loss": 2.486661911010742
+        },
+        {
+            "accuracy": 82,
+            "loss": 2.8891260623931885
+        },
+        {
+            "accuracy": 82,
+            "loss": 3.027207136154175
+        },
+        {
+            "accuracy": 82,
+            "loss": 2.8686633110046387
+        }
+    ],
+    "best_net_epoch": 9,
+    "test_classes_accuracy": {
+        "freshripe": 0.0,
+        "freshunripe": 0.0,
+        "overripe": 0.0,
+        "ripe": 99.40119760479043,
+        "rotten": 0.0,
+        "unripe": 0.0
+    }
+}

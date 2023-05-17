@@ -20,9 +20,9 @@ import json
 
 #CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
 CLASSES = ('overripe', 'ripe', 'rotten', 'unripe')
-EPHOCS = 3  #input EPHOCH + 1
+EPHOCS = 30  #input EPHOCH + 1
 
-ARCHITECHTURES = ["Res50", "CustomCNN"]
+ARCHITECHTURES = ["CustomCNN"]
 BATCH_SIZES = [5, 10, 20]
 LEARNING_RATES = [0.001, 0.0005, 0.0001]
 
@@ -72,7 +72,7 @@ class Net(nn.Module):
 
 #tollerance is the amount of scores that are counted, min delta is the minimum increase required to continue
 class EarlyStopping:
-    def __init__(self, tolerance=5, min_delta=0.001):
+    def __init__(self, tolerance=3, min_delta=0.01):
 
         self.tolerance = tolerance
         self.min_delta = min_delta
@@ -125,12 +125,15 @@ def test_dataloader(loader):
     print(" | ".join(images_labels))    
 
 # train the net
-def train():
+def train(save_path):
     train_scores_history = []
     valid_scores_history = []
     early_stopping = EarlyStopping()
     best_accuracy = 0
     best_net_epoch = 0
+
+    train_scores_history.append(test_overall(net, trainloader))
+    valid_scores_history.append(test_overall(net, validloader))
     for epoch in range(EPHOCS):  # loop over the dataset multiple times
         running_loss = 0.0
         runs = 0
@@ -157,7 +160,7 @@ def train():
         latest_accuracy = valid_scores_history[-1]["accuracy"]
         if latest_accuracy > best_accuracy:
             best_accuracy = latest_accuracy
-            best_net = copy.deepcopy(net)
+            save(save_path)
             #optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003)
             best_net_epoch = epoch
 
@@ -184,12 +187,14 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     plt.title("Performance")
     train_scores_accuracy_history = [score["accuracy"] for score in train_scores_history]
     valid_scores_accuracy_history = [score["accuracy"] for score in valid_scores_history]
-    plt.xlim(1, n_epochs+1)
-    plt.xticks(np.arange(1, n_epochs+1, 1))
+    plt.xlim(0, n_epochs  + 1)
+    plt.xticks(np.arange(0, n_epochs + 1, 1))
+    plt.axhline(y = test_score["accuracy"], linestyle="dashed", color = '#cccccc', linewidth=0.7)
     plt.plot(train_scores_accuracy_history, linestyle="solid", label="Train accuracy")
     plt.plot(valid_scores_accuracy_history, linestyle="dotted", label="Validation accuracy")
-    plt.axvline(x = best_net_epoch, color = 'r', label = 'Early Stop')
-    plt.plot(best_net_epoch, test_score, 'go', label = "Test score")
+    plt.axvline(x = best_net_epoch, color = 'r', label = 'Early stop')
+    plt.yticks(list(plt.yticks()[0]) + [test_score["accuracy"]])
+    plt.plot(best_net_epoch, test_score["accuracy"], 'go', label = "Test accuracy")
     plt.plot()
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy (%)")
@@ -199,11 +204,14 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     plt.title("Optimization")
     train_scores_loss_history = [score["loss"] for score in train_scores_history]
     valid_scores_loss_history = [score["loss"] for score in valid_scores_history]
-    plt.xlim(1, n_epochs+1)
-    plt.xticks(np.arange(1, n_epochs+1, 1))
+    plt.xlim(0, n_epochs  + 1)
+    plt.xticks(np.arange(0, n_epochs + 1, 1))
+    plt.axhline(y = test_score["loss"], linestyle="dashed", color = '#cccccc', linewidth=0.7)
     plt.plot(train_scores_loss_history, linestyle="solid", label="Train loss")
     plt.plot(valid_scores_loss_history, linestyle="dotted", label="Validation loss")
-    plt.axvline(x = best_net_epoch, color = 'r', label = 'Early Stop')
+    plt.axvline(x = best_net_epoch, color = 'r', label = 'Early stop')
+    plt.yticks(list(plt.yticks()[0]) + [test_score["loss"]])
+    plt.plot(best_net_epoch, test_score["loss"], 'go', label = "Test loss")
     plt.xlabel("Epoch")
     plt.ylabel("Loss (%)")
     plt.legend()
@@ -274,15 +282,16 @@ def test_classes_accuracy():
 
 def save(path):
     print("Saving to ", path)
-    torch.save(best_net.state_dict(), path + ".pth")
-    print("Saved")
-    with open(PATH + "_plotdata.json", "w") as outfile:
-        outfile.write(json.dumps(dump_data, indent=4))
+    torch.save(net.state_dict(), path + ".pth")
 
 def load(path):
     print("Loading from ", path)
     net = Net()
-    net.load_state_dict(torch.load(path), map_location="cuda:0")
+    if ("CustomCNN" in path):
+        net = Net().to(device)
+    else:
+        net = torchvision.models.resnet50(weights='DEFAULT').to(device)
+    net.load_state_dict(torch.load(path + ".pth"))    
     print("Loaded")
     return net
 
@@ -326,23 +335,23 @@ for architecture in ARCHITECHTURES:
                                                      shuffle=False, num_workers=2)
 
             net = Net()
-            best_net = net
             if (architecture == "Res50"):
                 net = torchvision.models.resnet50(weights='DEFAULT').to(device)
             elif(architecture == "CustomCNN"):
                 net.to(device)  #to the GPU
             criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
             optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003) #stocastic gradient descent weight decay implements a L2 regularization to reduce spikes in loss
+            
+            train_scores_history, valid_scores_history, best_net_epoch = train(PATH)
 
-            train_scores_history, valid_scores_history, best_net_epoch = train()
-            best_net.to(device)
-            test_score = test_overall(best_net, testloader)["accuracy"]
+            load(PATH) #loads the latest (thus best performing) saved model
+            test_score = test_overall(net, testloader)
             print(test_score)
             dump_data.update({"test_score": test_score})
             plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
             dump_data.update( {"test_classes_accuracy": test_classes_accuracy()})
-
-            save(PATH)
+            with open(PATH + "_plotdata.json", "w") as outfile:
+                outfile.write(json.dumps(dump_data, indent=4))
 end = time.time()
 print(end - start) #total time in seconds
 #random_predict()

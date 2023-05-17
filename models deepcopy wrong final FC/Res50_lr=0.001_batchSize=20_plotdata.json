@@ -1,0 +1,72 @@
+{
+    "test_score": 12,
+    "train_scores_history": [
+        {
+            "accuracy": 77,
+            "loss": 1.5813221316548842
+        },
+        {
+            "accuracy": 88,
+            "loss": 0.48381528262096113
+        },
+        {
+            "accuracy": 93,
+            "loss": 0.308254190430611
+        },
+        {
+            "accuracy": 96,
+            "loss": 0.20503277696339012
+        },
+        {
+            "accuracy": 97,
+            "loss": 0.13732582999251877
+        },
+        {
+            "accuracy": 97,
+            "loss": 0.10963788766508238
+        },
+        {
+            "accuracy": 98,
+            "loss": 0.07565711041694342
+        }
+    ],
+    "valid_scores_history": [
+        {
+            "accuracy": 75,
+            "loss": 1.8840785026550293
+        },
+        {
+            "accuracy": 79,
+            "loss": 2.0397157669067383
+        },
+        {
+            "accuracy": 83,
+            "loss": 2.2732222080230713
+        },
+        {
+            "accuracy": 85,
+            "loss": 2.6409544944763184
+        },
+        {
+            "accuracy": 85,
+            "loss": 1.4137194156646729
+        },
+        {
+            "accuracy": 85,
+            "loss": 1.9770312309265137
+        },
+        {
+            "accuracy": 85,
+            "loss": 2.3726136684417725
+        }
+    ],
+    "best_net_epoch": 3,
+    "test_classes_accuracy": {
+        "freshripe": 0.0,
+        "freshunripe": 97.97979797979798,
+        "overripe": 0.0,
+        "ripe": 0.0,
+        "rotten": 0.0,
+        "unripe": 0.0
+    }
+}
