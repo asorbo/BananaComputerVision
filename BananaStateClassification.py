@@ -19,10 +19,10 @@ import copy
 import json
 
 #CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
-CLASSES = ('overripe', 'ripe', 'rotten', 'unripe')
+CLASSES = ('unripe', 'ripe', 'overripe', 'rotten')
 EPHOCS = 30  #input EPHOCH + 1
 
-ARCHITECHTURES = ["CustomCNN"]
+ARCHITECHTURES = ["CustomCNN", "Res50"]
 BATCH_SIZES = [5, 10, 20]
 LEARNING_RATES = [0.001, 0.0005, 0.0001]
 
@@ -187,8 +187,8 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     plt.title("Performance")
     train_scores_accuracy_history = [score["accuracy"] for score in train_scores_history]
     valid_scores_accuracy_history = [score["accuracy"] for score in valid_scores_history]
-    plt.xlim(0, n_epochs  + 1)
-    plt.xticks(np.arange(0, n_epochs + 1, 1))
+    plt.xlim(0, n_epochs)
+    plt.xticks(np.arange(0, n_epochs, 1))
     plt.axhline(y = test_score["accuracy"], linestyle="dashed", color = '#cccccc', linewidth=0.7)
     plt.plot(train_scores_accuracy_history, linestyle="solid", label="Train accuracy")
     plt.plot(valid_scores_accuracy_history, linestyle="dotted", label="Validation accuracy")
@@ -204,8 +204,8 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     plt.title("Optimization")
     train_scores_loss_history = [score["loss"] for score in train_scores_history]
     valid_scores_loss_history = [score["loss"] for score in valid_scores_history]
-    plt.xlim(0, n_epochs  + 1)
-    plt.xticks(np.arange(0, n_epochs + 1, 1))
+    plt.xlim(0, n_epochs)
+    plt.xticks(np.arange(0, n_epochs, 1))
     plt.axhline(y = test_score["loss"], linestyle="dashed", color = '#cccccc', linewidth=0.7)
     plt.plot(train_scores_loss_history, linestyle="solid", label="Train loss")
     plt.plot(valid_scores_loss_history, linestyle="dotted", label="Validation loss")
@@ -304,6 +304,11 @@ transform = transforms.Compose(
      transforms.Resize(64),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])   #to make model training less sensitive to the scale of features
 
+dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/classesTotal.csv", 
+                                            "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/",
+                                            transform=transform)
+splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(30))
+
 start = time.time()
 print(start)
 dump_data = {}
@@ -316,22 +321,14 @@ for architecture in ARCHITECHTURES:
             NAME = f'{architecture}, lr={learning_rate}, batch size={batch_size}'
             print(f"\n\n Training: {NAME}")
 
-            trainset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/train/_classes.csv", 
-                                            "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/train/",
-                                            transform=transform)
-            trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+            
+            trainloader = torch.utils.data.DataLoader(splits[0], batch_size=batch_size,
                                                     shuffle=True, num_workers=2)
 
-            validset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/valid/_classes.csv", 
-                                            "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/valid/",
-                                            transform=transform)
-            validloader = torch.utils.data.DataLoader(validset, batch_size=batch_size,
+            validloader = torch.utils.data.DataLoader(splits[1], batch_size=batch_size,
                                                     shuffle=False, num_workers=2)
             
-            testset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/test/_classes.csv", 
-                                            "/home/ago/Documents/Thesis/BananaComputerVision/MonoClass4ClassDataset/test/",
-                                            transform=transform)
-            testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+            testloader = torch.utils.data.DataLoader(splits[2], batch_size=batch_size,
                                                      shuffle=False, num_workers=2)
 
             net = Net()
