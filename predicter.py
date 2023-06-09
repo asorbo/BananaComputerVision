@@ -48,6 +48,7 @@ class CustomImageDataset(Dataset):
 # functions to show an image
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
+    img = torch.Tensor.cpu(img)
     npimg = img.numpy()
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
@@ -91,6 +92,42 @@ def random_predict(loader):
     # print images
     imshow(torchvision.utils.make_grid(images.cpu()))
 
+#test overall accuracy
+#param averaged_minibatch_training_loss replaces the training loss if available 
+def test_overall(net, dataloader, averaged_minibatch_training_loss = None):
+    #do this at each epoch (then plot)
+    correct = 0
+    total = 0
+    misclassifications = {}
+    misclassified_images = []
+    # since we're not training, we don't need to calculate the gradients for our outputs
+    with torch.no_grad():
+        for data in dataloader:
+            images, labels = data[0].to(device), data[1].to(device)
+            # calculate outputs by running images through the network
+            outputs = net(images).to(device)
+            loss = criterion(outputs, labels)
+            # the class with the highest energy is what we choose as prediction
+            _, predicted = torch.max(outputs.data, 1)
+            count_misclassifications(predicted, labels, misclassifications, misclassified_images, images)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    accuracy = 100 * correct // total
+    print(misclassifications)
+    imshow(torchvision.utils.make_grid(misclassified_images))
+    return {"accuracy": accuracy, "loss": (averaged_minibatch_training_loss if averaged_minibatch_training_loss else loss.item())}
+
+def count_misclassifications(predicted, labels, misclassifications, misclassified_images, images):
+    i = 0
+    for prediction in predicted:
+        if int(prediction) != int(labels[i]):
+            index = f"True:{CLASSES[labels[i]]}_Predicted:{CLASSES[predicted[i]]}"
+            if index not in misclassifications:
+                misclassifications.update({index: 0})
+            misclassifications[index] += 1
+            if CLASSES[labels[i]] == "ripe" and CLASSES[predicted[i]] == "overripe":
+                misclassified_images.append(images[i])
+
 # The (convolutional) neural network baseline
 class Net(nn.Module):
     def __init__(self):
@@ -128,12 +165,23 @@ print('GPU is being used' if torch.cuda.is_available() else '!!! ⚠ CPU is bein
 
 transform = transforms.Compose(
     [transforms.ToPILImage(),transforms.ToTensor(), #PIL -> Python Imaging Library format
-     transforms.Resize(256),
+     transforms.Resize(64),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])   #to make model training less sensitive to the scale of features
 
-dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/photos/_classes.csv", 
-                                            "/home/ago/Documents/Thesis/BananaComputerVision/photos/",
+#dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/photos/_classes.csv", 
+#                                            "/home/ago/Documents/Thesis/BananaComputerVision/photos/",
+#                                            transform=transform)
+dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/classesTotal.csv", 
+                                            "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/",
                                             transform=transform)
-loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
+splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(30))
+#loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
+loader = torch.utils.data.DataLoader(splits[2], batch_size=5,
+                                                     shuffle=False, num_workers=2)
 
-random_predict(loader)
+criterion = nn.CrossEntropyLoss() 
+
+
+net = load(PATH)
+print(test_overall(net, loader))
+#random_predict(loader)
