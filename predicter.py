@@ -20,7 +20,7 @@ import json
 
 
 CLASSES = ('unripe', 'ripe', 'overripe', 'rotten')
-PATH = "models/Res50_lr=0.001_batchSize=5.pth"
+PATH = "models/Res50_lr=0.0005_batchSize=10"
 
 #The custom image dataset loader
 class CustomImageDataset(Dataset):
@@ -86,7 +86,10 @@ def random_predict(loader):
     net = load(PATH)
     outputs = net(images)
     outputs.to(device)
-    _, predicted = torch.max(outputs, 1)
+    val, predicted = torch.max(outputs, 1)
+    print(outputs)
+
+
     print('Predicted: ', ' '.join(f'{CLASSES[predicted[j]]:5s}'
                                 for j in range(1)))
     # print images
@@ -148,14 +151,20 @@ class Net(nn.Module):
         x = self.fc3(x)
         return x    
     
+    
+    
 def load(path):
     print("Loading from ", path)
     net = Net()
+    net.to(device)
+    
     if ("CustomCNN" in path):
         net = Net().to(device)
     else:
-        net = torchvision.models.resnet50(weights='DEFAULT').to(device)
-    net.load_state_dict(torch.load(path))    
+        net = torchvision.models.resnet50(weights='DEFAULT')
+        net.fc = nn.Linear(net.fc.in_features, 4)
+        net.to(device)
+    net.load_state_dict(torch.load(path + ".pth")) 
     print("Loaded")
     return net
 
@@ -165,7 +174,7 @@ print('GPU is being used' if torch.cuda.is_available() else '!!! ⚠ CPU is bein
 
 transform = transforms.Compose(
     [transforms.ToPILImage(),transforms.ToTensor(), #PIL -> Python Imaging Library format
-     transforms.Resize(64),
+     transforms.Resize(512),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])   #to make model training less sensitive to the scale of features
 
 #dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/photos/_classes.csv", 
@@ -174,14 +183,20 @@ transform = transforms.Compose(
 dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/classesTotal.csv", 
                                             "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/",
                                             transform=transform)
-splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(30))
+splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(35))
 #loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
-loader = torch.utils.data.DataLoader(splits[2], batch_size=5,
+loader = torch.utils.data.DataLoader(splits[2], batch_size=6,
                                                      shuffle=False, num_workers=2)
 
+dataiter = iter(loader)
+images, labels = next(dataiter)
+
+    # show images
+imshow(torchvision.utils.make_grid(images, nrow=3))
 criterion = nn.CrossEntropyLoss() 
 
 
 net = load(PATH)
+
 print(test_overall(net, loader))
 #random_predict(loader)

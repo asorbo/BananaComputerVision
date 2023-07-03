@@ -22,7 +22,10 @@ import json
 CLASSES = ('unripe', 'ripe', 'overripe', 'rotten')
 EPHOCS = 30  #input EPHOCH + 1
 
-ARCHITECHTURES = ["CustomCNN", "Res50"]
+#ARCHITECHTURES = ["CustomCNN", "Res50"]
+#BATCH_SIZES = [5, 10, 20]
+#LEARNING_RATES = [0.001, 0.0005, 0.0001]
+ARCHITECHTURES = ["Res50"]
 BATCH_SIZES = [5, 10, 20]
 LEARNING_RATES = [0.001, 0.0005, 0.0001]
 
@@ -290,10 +293,13 @@ def load(path):
     if ("CustomCNN" in path):
         net = Net().to(device)
     else:
-        net = torchvision.models.resnet50(weights='DEFAULT').to(device)
-    net.load_state_dict(torch.load(path + ".pth"))    
+        net = torchvision.models.resnet50(weights='DEFAULT')
+        net.fc = nn.Linear(net.fc.in_features, 4)
+        net.to(device)
+    net.load_state_dict(torch.load(path + ".pth")) 
     print("Loaded")
     return net
+
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -333,7 +339,9 @@ for architecture in ARCHITECHTURES:
 
             net = Net()
             if (architecture == "Res50"):
-                net = torchvision.models.resnet50(weights='DEFAULT').to(device)
+                net = torchvision.models.resnet50(weights='DEFAULT')
+                net.fc = nn.Linear(net.fc.in_features, 4).to(device)
+                net.to(device)
             elif(architecture == "CustomCNN"):
                 net.to(device)  #to the GPU
             criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
