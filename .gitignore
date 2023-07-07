@@ -128,12 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-data/
-dataset/
-dataset2/
-MonoClassDataset/
-MonoClass4ClassDataset/
-models before loss update/
+outputs/
+TheDataset/
 models/
-final models/
-photos/
