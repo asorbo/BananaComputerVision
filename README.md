@@ -30,6 +30,7 @@ In the BananaStateClassification.py set the constants to the desired values and 
 
 To be able to run this unzip the dataset, place it in the project directory, and make sure that IMAGE_DATASET_LABELS_PATH and IMAGE_DATASET_LABELS are set accordingly
 It is possible to swap the dataset maintaining the structure of the labels file (classesTotal.csv)
+
 The parameters under "#Gridsearch and training parameters" can be set to perform a grid search, alternatively, one single value per parameter can be set to train a single model (e.g. ARCHITECTURES = ["Res50"] BATCH_SIZES = [10] LEARNING_RATES = [0.0005].
 
 The model training will now begin. The trained models, the training plots, and relative data will be saved in the directory specified in the "BASE_PATH" constant (make sure the directory is valid). By default, this is the "outputs" folder in the project directory. 
