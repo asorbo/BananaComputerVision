@@ -20,7 +20,8 @@ import json
 
 
 CLASSES = ('unripe', 'ripe', 'overripe', 'rotten')
-PATH = "models/Res50_lr=0.0005_batchSize=10"
+PATH = "./outputs/models/Res50_lr=0.0005_batchSize=10"
+
 
 #The custom image dataset loader
 class CustomImageDataset(Dataset):
@@ -53,20 +54,18 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
 
-def test_dataloader(loader):
+#functon to test the functioning of a dataloader given an dataloader and a batch size
+def test_dataloader(loader, batch_size):
     # get some random training images
     dataiter = iter(loader)
     images, labels = next(dataiter)
 
     # show images
     imshow(torchvision.utils.make_grid(images))
-    # print labels
-    #print the tensor label
-    #print(' '.join(f'{labels[j]}' for j in range(batch_size)))
 
     # print the human label
     images_labels = []
-    for image_index in range(BATCH_SIZE):
+    for image_index in range(batch_size):
         current_labels = []
         i = 0
         for label in torch.nn.functional.one_hot(labels[image_index].to(torch.int64)):
@@ -76,7 +75,8 @@ def test_dataloader(loader):
         images_labels.append('-'.join(current_labels))
     print(" | ".join(images_labels))    
 
-def random_predict(loader):
+#Predicts the label for an image loaded through the given loader
+def predict(loader):
     dataiter = iter(loader)
     data = next(dataiter)
     images, labels = data[0].to(device), data[1].to(device)
@@ -96,8 +96,10 @@ def random_predict(loader):
     imshow(torchvision.utils.make_grid(images.cpu()))
 
 #test overall accuracy
+#Use the given net to predct the labels of images loaded through the given loader
+
 #param averaged_minibatch_training_loss replaces the training loss if available 
-def test_overall(net, dataloader, averaged_minibatch_training_loss = None):
+def test_overall(net, dataloader, averaged_minibatch_training_loss = None, check_misclassifications = False):
     #do this at each epoch (then plot)
     correct = 0
     total = 0
@@ -112,15 +114,20 @@ def test_overall(net, dataloader, averaged_minibatch_training_loss = None):
             loss = criterion(outputs, labels)
             # the class with the highest energy is what we choose as prediction
             _, predicted = torch.max(outputs.data, 1)
-            count_misclassifications(predicted, labels, misclassifications, misclassified_images, images)
+            if check_misclassifications:
+                count_misclassifications(predicted, labels, misclassifications, misclassified_images, images)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
     accuracy = 100 * correct // total
-    print(misclassifications)
-    imshow(torchvision.utils.make_grid(misclassified_images))
+    if check_misclassifications:
+        print(misclassifications)
+        if len(misclassified_images):
+            imshow(torchvision.utils.make_grid(misclassified_images))
     return {"accuracy": accuracy, "loss": (averaged_minibatch_training_loss if averaged_minibatch_training_loss else loss.item())}
 
-def count_misclassifications(predicted, labels, misclassifications, misclassified_images, images):
+#counts the misclassifications
+#if given a list of the form ["trueClass", "predictedClass"] also saves the misclassified images in the misclassified_images list
+def count_misclassifications(predicted, labels, misclassifications, misclassified_images, images, images_true_predicted = [None, None]):
     i = 0
     for prediction in predicted:
         if int(prediction) != int(labels[i]):
@@ -128,7 +135,7 @@ def count_misclassifications(predicted, labels, misclassifications, misclassifie
             if index not in misclassifications:
                 misclassifications.update({index: 0})
             misclassifications[index] += 1
-            if CLASSES[labels[i]] == "ripe" and CLASSES[predicted[i]] == "overripe":
+            if CLASSES[labels[i]] == images_true_predicted[0] and CLASSES[predicted[i]] == images_true_predicted[1]:
                 misclassified_images.append(images[i])
 
 # The (convolutional) neural network baseline
@@ -151,8 +158,7 @@ class Net(nn.Module):
         x = self.fc3(x)
         return x    
     
-    
-    
+#load a saved model given a path    
 def load(path):
     print("Loading from ", path)
     net = Net()
@@ -172,9 +178,10 @@ def load(path):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('GPU is being used' if torch.cuda.is_available() else '!!! ⚠ CPU is being used ⚠ !!!')
 
+#Define some preprocessing for the dataloader
 transform = transforms.Compose(
     [transforms.ToPILImage(),transforms.ToTensor(), #PIL -> Python Imaging Library format
-     transforms.Resize(512),
+     transforms.Resize(64),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])   #to make model training less sensitive to the scale of features
 
 #dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/photos/_classes.csv", 
@@ -183,20 +190,13 @@ transform = transforms.Compose(
 dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/classesTotal.csv", 
                                             "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/",
                                             transform=transform)
-splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(35))
+splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(30))
 #loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
-loader = torch.utils.data.DataLoader(splits[2], batch_size=6,
+loader = torch.utils.data.DataLoader(splits[2], batch_size=10,
                                                      shuffle=False, num_workers=2)
 
-dataiter = iter(loader)
-images, labels = next(dataiter)
-
-    # show images
-imshow(torchvision.utils.make_grid(images, nrow=3))
 criterion = nn.CrossEntropyLoss() 
-
 
 net = load(PATH)
 
 print(test_overall(net, loader))
-#random_predict(loader)

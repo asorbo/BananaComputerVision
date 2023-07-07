@@ -18,16 +18,21 @@ import time
 import copy
 import json
 
-#CLASSES = ('freshripe', 'freshunripe', 'overripe', 'ripe', 'rotten', 'unripe')
-CLASSES = ('unripe', 'ripe', 'overripe', 'rotten')
-EPHOCS = 30  #input EPHOCH + 1
 
-#ARCHITECHTURES = ["CustomCNN", "Res50"]
-#BATCH_SIZES = [5, 10, 20]
-#LEARNING_RATES = [0.001, 0.0005, 0.0001]
-ARCHITECHTURES = ["Res50"]
+CLASSES = ('unripe', 'ripe', 'overripe', 'rotten')
+MAXIMUM_EPHOCS = 30  #input EPHOCHS + 1
+ARCHITECHTURES = ["CustomCNN", "Res50"]
 BATCH_SIZES = [5, 10, 20]
 LEARNING_RATES = [0.001, 0.0005, 0.0001]
+
+EARLY_STOPPING_TOLLERANCE = 3
+EARLY_STOPPING_MINIMUM_DELTA = 0.01
+
+PLOT_WIDTH = 15
+PLOT_HEIGHT = 7
+PLOT_LINEWIDTH = 0.7
+
+BASE_PATH = "./outputs"  #The directory where to save the trained models, training plots, and training/testing data
 
 
 #The custom image dataset loader
@@ -44,9 +49,8 @@ class CustomImageDataset(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = read_image(img_path)
-        label = torch.IntTensor([label for label in self.img_labels.iloc[idx, 1:7]])
+        label = torch.IntTensor([label for label in self.img_labels.iloc[idx, 1:len(CLASSES) + 1]])
         label = torch.argmax(label) #hot encode the tensor 
-        #label = torch.Tensor(self.img_labels.loc[img_path,:].values)
         if self.transform:
             image = self.transform(image)
         if self.target_transform:
@@ -75,7 +79,7 @@ class Net(nn.Module):
 
 #tollerance is the amount of scores that are counted, min delta is the minimum increase required to continue
 class EarlyStopping:
-    def __init__(self, tolerance=3, min_delta=0.01):
+    def __init__(self, tolerance=EARLY_STOPPING_TOLLERANCE, min_delta=EARLY_STOPPING_MINIMUM_DELTA):
 
         self.tolerance = tolerance
         self.min_delta = min_delta
@@ -97,6 +101,7 @@ class EarlyStopping:
             print(f"Improved less then {self.min_delta*100}\% in the last {self.tolerance} epochs, early stopping")
             self.early_stop = True 
     
+
 # functions to show an image
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
@@ -104,20 +109,17 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
 
-def test_dataloader(loader):
+def test_dataloader(loader, batch_size):
     # get some random training images
     dataiter = iter(loader)
     images, labels = next(dataiter)
 
     # show images
     imshow(torchvision.utils.make_grid(images))
-    # print labels
-    #print the tensor label
-    #print(' '.join(f'{labels[j]}' for j in range(batch_size)))
 
     # print the human label
     images_labels = []
-    for image_index in range(BATCH_SIZE):
+    for image_index in range(batch_size):
         current_labels = []
         i = 0
         for label in torch.nn.functional.one_hot(labels[image_index].to(torch.int64)):
@@ -137,7 +139,7 @@ def train(save_path):
 
     train_scores_history.append(test_overall(net, trainloader))
     valid_scores_history.append(test_overall(net, validloader))
-    for epoch in range(EPHOCS):  # loop over the dataset multiple times
+    for epoch in range(MAXIMUM_EPHOCS):  # loop over the dataset multiple times
         running_loss = 0.0
         runs = 0
         loss = None
@@ -156,7 +158,7 @@ def train(save_path):
             runs += 1
             running_loss += loss.item()
         running_loss /= runs
-        print(f"Epoch {epoch+1}/{EPHOCS}: {running_loss}")
+        print(f"Epoch {epoch+1}/{MAXIMUM_EPHOCS}: {running_loss}")
         train_scores_history.append(test_overall(net, trainloader, averaged_minibatch_training_loss=running_loss))
         valid_scores_history.append(test_overall(net, validloader))
 
@@ -175,15 +177,15 @@ def train(save_path):
     return train_scores_history, valid_scores_history, best_net_epoch
 
 #this saves data before plotting, should refactor
-def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score):
+def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score, path):
     dump_data.update({"train_scores_history": train_scores_history, 
                  "valid_scores_history":valid_scores_history,
                  "best_net_epoch": best_net_epoch})
     
     n_epochs = len(valid_scores_history)
 
-    plt.figure(figsize=(15, 7))
-    plt.suptitle(NAME)
+    plt.figure(figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+    plt.suptitle(name)
     plt.subplots_adjust(hspace=1)
 
     plt.subplot(121).set_box_aspect(1)
@@ -192,7 +194,7 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     valid_scores_accuracy_history = [score["accuracy"] for score in valid_scores_history]
     plt.xlim(0, n_epochs)
     plt.xticks(np.arange(0, n_epochs, 1))
-    plt.axhline(y = test_score["accuracy"], linestyle="dashed", color = '#cccccc', linewidth=0.7)
+    plt.axhline(y = test_score["accuracy"], linestyle="dashed", color = '#cccccc', linewidth=PLOT_LINEWIDTH)
     plt.plot(train_scores_accuracy_history, linestyle="solid", label="Train accuracy")
     plt.plot(valid_scores_accuracy_history, linestyle="dotted", label="Validation accuracy")
     plt.axvline(x = best_net_epoch, color = 'r', label = 'Early stop')
@@ -209,7 +211,7 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     valid_scores_loss_history = [score["loss"] for score in valid_scores_history]
     plt.xlim(0, n_epochs)
     plt.xticks(np.arange(0, n_epochs, 1))
-    plt.axhline(y = test_score["loss"], linestyle="dashed", color = '#cccccc', linewidth=0.7)
+    plt.axhline(y = test_score["loss"], linestyle="dashed", color = '#cccccc', linewidth=PLOT_LINEWIDTH)
     plt.plot(train_scores_loss_history, linestyle="solid", label="Train loss")
     plt.plot(valid_scores_loss_history, linestyle="dotted", label="Validation loss")
     plt.axvline(x = best_net_epoch, color = 'r', label = 'Early stop')
@@ -220,23 +222,8 @@ def plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
     plt.legend()
     
     
-    plt.savefig(PATH + ".png")
-    print("Plot saved as ", PATH + ".png")
-
-def random_predict():
-    dataiter = iter(testloader)
-    images, labels = next(dataiter)
-
-    print('GroundTruth: ', ' '.join(f'{CLASSES[labels[j]]:5s}' for j in range(4)))
-
-    net = load(PATH + ".pth")
-    outputs = net(images)
-    outputs.to(device)
-    _, predicted = torch.max(outputs, 1)
-    print('Predicted: ', ' '.join(f'{CLASSES[predicted[j]]:5s}'
-                                for j in range(4)))
-    # print images
-    imshow(torchvision.utils.make_grid(images))
+    plt.savefig(path + ".png")
+    print("Plot saved as ", path + ".png")
 
 #test overall accuracy
 #param averaged_minibatch_training_loss replaces the training loss if available 
@@ -283,10 +270,12 @@ def test_classes_accuracy():
         test_classes_accuracy.update({f"{classname}": accuracy})
     return test_classes_accuracy
 
+#Save a model to a given path
 def save(path):
     print("Saving to ", path)
     torch.save(net.state_dict(), path + ".pth")
 
+#Load a model from a given path
 def load(path):
     print("Loading from ", path)
     net = Net()
@@ -305,6 +294,7 @@ def load(path):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('GPU is being used' if torch.cuda.is_available() else '!!! ⚠ CPU is being used ⚠ !!!')
 
+#Defini some preprocessing to 
 transform = transforms.Compose(
     [transforms.ToPILImage(),transforms.ToTensor(), #PIL -> Python Imaging Library format
      transforms.Resize(64),
@@ -321,11 +311,9 @@ dump_data = {}
 for architecture in ARCHITECHTURES:
     for batch_size in BATCH_SIZES:
         for learning_rate in LEARNING_RATES:
-            global PATH
-            PATH = f'./models/{architecture}_lr={learning_rate}_batchSize={batch_size}'
-            global NAME
-            NAME = f'{architecture}, lr={learning_rate}, batch size={batch_size}'
-            print(f"\n\n Training: {NAME}")
+            path = f'{BASE_PATH}/{architecture}_lr={learning_rate}_batchSize={batch_size}'
+            name = f'{architecture}, lr={learning_rate}, batch size={batch_size}'
+            print(f"\n\n Training: {name}")
 
             
             trainloader = torch.utils.data.DataLoader(splits[0], batch_size=batch_size,
@@ -347,15 +335,15 @@ for architecture in ARCHITECHTURES:
             criterion = nn.CrossEntropyLoss()   #Cross entropy loss (to see how different the prediction is from the ground truth)
             optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.003) #stocastic gradient descent weight decay implements a L2 regularization to reduce spikes in loss
             
-            train_scores_history, valid_scores_history, best_net_epoch = train(PATH)
+            train_scores_history, valid_scores_history, best_net_epoch = train(path)
 
-            load(PATH) #loads the latest (thus best performing) saved model
+            load(path) #loads the latest (thus best performing) saved model
             test_score = test_overall(net, testloader)
             print(test_score)
             dump_data.update({"test_score": test_score})
-            plot(train_scores_history, valid_scores_history, best_net_epoch, test_score)
+            plot(train_scores_history, valid_scores_history, best_net_epoch, test_score, path)
             dump_data.update( {"test_classes_accuracy": test_classes_accuracy()})
-            with open(PATH + "_plotdata.json", "w") as outfile:
+            with open(path + "_plotdata.json", "w") as outfile:
                 outfile.write(json.dumps(dump_data, indent=4))
 end = time.time()
 print(end - start) #total time in seconds
