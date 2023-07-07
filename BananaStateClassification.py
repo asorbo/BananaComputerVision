@@ -33,6 +33,9 @@ PLOT_HEIGHT = 7
 PLOT_LINEWIDTH = 0.7
 
 BASE_PATH = "./outputs"  #The directory where to save the trained models, training plots, and training/testing data
+IMAGE_DATASET_LABELS_PATH = "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/classesTotal.csv" 
+IMAGE_DATASET_PATH = "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/"
+SPLIT_RATIO = [.7, .15, .15] #the ratio to split the dataset in the form: [traingSplit, validationSplit, testSplit]
 
 
 #The custom image dataset loader
@@ -294,16 +297,14 @@ def load(path):
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('GPU is being used' if torch.cuda.is_available() else '!!! ⚠ CPU is being used ⚠ !!!')
 
-#Defini some preprocessing to 
+#Define some preprocessing for the dataloader
 transform = transforms.Compose(
     [transforms.ToPILImage(),transforms.ToTensor(), #PIL -> Python Imaging Library format
      transforms.Resize(64),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])   #to make model training less sensitive to the scale of features
 
-dataset = CustomImageDataset("/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/classesTotal.csv", 
-                                            "/home/ago/Documents/Thesis/BananaComputerVision/TheDataset/",
-                                            transform=transform)
-splits = torch.utils.data.random_split(dataset, [.7, .15, .15], torch.Generator().manual_seed(30))
+dataset = CustomImageDataset(IMAGE_DATASET_LABELS_PATH, IMAGE_DATASET_PATH, transform=transform)
+splits = torch.utils.data.random_split(dataset, SPLIT_RATIO, torch.Generator().manual_seed(30))  #The seed is a randomly chosen fixed value (30)
 
 start = time.time()
 print(start)
@@ -328,7 +329,7 @@ for architecture in ARCHITECHTURES:
             net = Net()
             if (architecture == "Res50"):
                 net = torchvision.models.resnet50(weights='DEFAULT')
-                net.fc = nn.Linear(net.fc.in_features, 4).to(device)
+                net.fc = nn.Linear(net.fc.in_features, len(CLASSES)).to(device)
                 net.to(device)
             elif(architecture == "CustomCNN"):
                 net.to(device)  #to the GPU
